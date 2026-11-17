@@ -62,7 +62,7 @@ def _set_samples(sc, n):
         sc.eevee.taa_render_samples = n
 
 
-@method("set_render_settings", mutating=True)
+@method("set_render_settings", mutating=True, keys=("engine", "resolution_x", "resolution_y", "resolution_percentage", "samples", "output_format", "output_path", ))
 def set_render_settings(params, ctx):
     sc = bpy.context.scene
     r = sc.render
@@ -91,7 +91,7 @@ def set_render_settings(params, ctx):
     return _settings(sc)
 
 
-@method("render_image", mutating=False)
+@method("render_image", mutating=False, keys=("camera", "samples", "resolution_percentage", ))
 def render_image(params, ctx):
     sc = bpy.context.scene
     r = sc.render

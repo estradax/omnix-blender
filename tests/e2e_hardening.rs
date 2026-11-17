@@ -455,3 +455,190 @@ async fn file_policy_preferences_work_through_the_installed_extension() {
 fn s_(p: &std::path::Path) -> String {
     p.to_str().unwrap().to_string()
 }
+
+// ---------------------------------------------------------------------------------------------
+// Socket directory policy, connection cap, timeout_s validation, schema/add-on consistency
+// ---------------------------------------------------------------------------------------------
+
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixStream;
+use std::time::Duration;
+
+fn line(s: &mut UnixStream, req: &str) -> serde_json::Value {
+    s.write_all(req.as_bytes()).unwrap();
+    s.write_all(b"\n").unwrap();
+    let mut resp = String::new();
+    BufReader::new(s.try_clone().unwrap())
+        .read_line(&mut resp)
+        .unwrap();
+    serde_json::from_str(&resp).unwrap_or_else(|e| panic!("bad response {resp:?}: {e}"))
+}
+
+fn connect_hello(sock: &std::path::Path) -> UnixStream {
+    let mut s = UnixStream::connect(sock).unwrap();
+    s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    assert_eq!(
+        line(&mut s, r#"{"v":1,"id":0,"method":"hello","params":{}}"#)["ok"],
+        true
+    );
+    s
+}
+
+#[tokio::test]
+async fn socket_directory_with_any_group_or_other_bits_or_a_symlink_is_refused() {
+    let bin = require_blender!();
+    for mode in [0o755, 0o750, 0o705] {
+        let mut h = Harness::unstarted(&bin, false);
+        let d = h.dir.path().join("pub");
+        std::fs::create_dir(&d).unwrap();
+        std::fs::set_permissions(&d, std::fs::Permissions::from_mode(mode)).unwrap();
+        h.sock = d.join("b.sock");
+        let e = h.try_spawn().unwrap_err();
+        assert!(e.contains("must be private"), "mode {mode:o}: {e}");
+        assert_eq!(
+            std::fs::metadata(&d).unwrap().permissions().mode() & 0o777,
+            mode,
+            "directory must not be chmod'ed behind the user's back"
+        );
+    }
+    let mut h = Harness::unstarted(&bin, false);
+    let real = h.dir.path().join("real");
+    std::fs::create_dir(&real).unwrap();
+    std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let link = h.dir.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    h.sock = link.join("b.sock");
+    let e = h.try_spawn().unwrap_err();
+    assert!(e.contains("symlink"), "{e}");
+    assert!(!real.join("b.sock").exists());
+}
+
+#[tokio::test]
+async fn connection_cap_is_enforced_and_slots_are_released() {
+    let bin = require_blender!();
+    let mut h = Harness::start(&bin, false);
+    let mut held: Vec<UnixStream> = (0..8).map(|_| connect_hello(&h.sock)).collect();
+    let ninth = UnixStream::connect(&h.sock).unwrap();
+    ninth
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    let mut resp = String::new();
+    BufReader::new(ninth.try_clone().unwrap())
+        .read_line(&mut resp)
+        .unwrap();
+    assert!(
+        resp.contains("\"busy\"") && resp.contains("too many connections"),
+        "{resp}"
+    );
+    // Releasing one slot lets a new client in (the add-on notices the close within about a second).
+    held.pop();
+    let mut ok_conn = None;
+    for _ in 0..20 {
+        let mut s = UnixStream::connect(&h.sock).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        let r = line(&mut s, r#"{"v":1,"id":0,"method":"hello","params":{}}"#);
+        if r["ok"] == true {
+            ok_conn = Some(s);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    assert!(ok_conn.is_some(), "slot never became free");
+    drop(held);
+    let c = h.client().await;
+    ok(&c, "scene_info", json!({})).await;
+    let _ = c.cancel().await;
+    h.shutdown().await;
+}
+
+#[tokio::test]
+async fn hostile_timeout_values_are_rejected_not_defaulted() {
+    let bin = require_blender!();
+    let mut h = Harness::start(&bin, false);
+    let mut s = connect_hello(&h.sock);
+    for bad in [
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "1e999",
+        "0",
+        "-5",
+        "true",
+        "\"10\"",
+        "[1]",
+        "null",
+    ] {
+        let r = line(
+            &mut s,
+            &format!(r#"{{"v":1,"id":7,"method":"scene_info","params":{{}},"timeout_s":{bad}}}"#),
+        );
+        assert_eq!(r["ok"], false, "timeout_s={bad} accepted: {r}");
+        assert_eq!(
+            r["error"]["code"], "invalid_argument",
+            "timeout_s={bad}: {r}"
+        );
+    }
+    // A huge but finite value is accepted (clamped), and the add-on still works.
+    let r = line(
+        &mut s,
+        r#"{"v":1,"id":8,"method":"scene_info","params":{},"timeout_s":1e12}"#,
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    // Unknown top-level fields and unknown params are rejected consistently with the Rust schemas.
+    let r = line(
+        &mut s,
+        r#"{"v":1,"id":9,"method":"scene_info","params":{},"evil":1}"#,
+    );
+    assert_eq!(r["error"]["code"], "protocol_error", "{r}");
+    let r = line(
+        &mut s,
+        r#"{"v":1,"id":10,"method":"create_primitive","params":{"type":"cube","locaton":[0,0,0]}}"#,
+    );
+    assert_eq!(r["error"]["code"], "invalid_argument", "{r}");
+    assert!(r["error"]["message"].as_str().unwrap().contains("locaton"));
+    h.shutdown().await;
+}
+
+#[tokio::test]
+async fn every_tool_schema_property_is_accepted_by_the_addon() {
+    let bin = require_blender!();
+    let mut h = Harness::start(&bin, true);
+    let hello = omnix_blender::link::Link::new(&h.sock)
+        .hello()
+        .await
+        .unwrap();
+    let c = h.client().await;
+    let tools = c.list_tools(None).await.unwrap().tools;
+    let mut checked = 0;
+    for t in tools.iter().filter(|t| t.name != "blender_guide") {
+        let accepted = hello
+            .params
+            .get(t.name.as_ref())
+            .unwrap_or_else(|| panic!("add-on has no method {}", t.name));
+        let props = t
+            .input_schema
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .cloned()
+            .unwrap_or_default();
+        for k in props.keys() {
+            // Client-side only knobs that are never forwarded.
+            if k == "max_edge" || (k == "timeout_s" && t.name == "render_image") {
+                continue;
+            }
+            assert!(
+                accepted.contains(k),
+                "tool {} advertises '{k}' but the add-on method does not accept it ({accepted:?})",
+                t.name
+            );
+            checked += 1;
+        }
+    }
+    assert!(
+        checked > 60,
+        "suspiciously few properties checked: {checked}"
+    );
+    let _ = c.cancel().await;
+    h.shutdown().await;
+}

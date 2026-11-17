@@ -16,7 +16,7 @@ DISABLED_MESSAGE = (
 )
 
 
-@method("run_python", mutating=True)
+@method("run_python", mutating=True, keys=("code", "timeout_s", "undo", ))
 def run_python(params, ctx):
     if not ctx.allow_run_python():
         raise OmnixError(DISABLED, DISABLED_MESSAGE)

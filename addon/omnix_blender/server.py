@@ -1,18 +1,23 @@
 """Unix-domain-socket server. Runs on background threads and never touches ``bpy``."""
 
+import math
 import os
 import socket
 import threading
+import time
 
 from . import paths, protocol
 from .protocol import OmnixError
 
 
 MAX_CONNECTIONS = 8
+IDLE_TIMEOUT = 600.0  # seconds without a complete request before a connection is dropped
 
 
 class Server:
-    def __init__(self, path, dispatcher, info):
+    def __init__(self, path, dispatcher, info, idle_timeout=IDLE_TIMEOUT, max_connections=MAX_CONNECTIONS):
+        self.idle_timeout = idle_timeout
+        self.max_connections = max_connections
         self.path = path
         self.dispatcher = dispatcher
         self.info = info  # dict returned by hello (static values captured on the main thread)
@@ -26,13 +31,15 @@ class Server:
 
     def start(self):
         paths.prepare_socket_path(self.path)
-        old_umask = os.umask(0o177)
+        # No process-wide umask games. The directory is private (0700, checked above), so no other user can reach
+        # the socket file in the instant between bind() and chmod(); the chmod makes the mode explicit.
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.bind(self.path)
-        finally:
-            os.umask(old_umask)
-        os.chmod(self.path, 0o600)
+            os.chmod(self.path, 0o600)
+        except BaseException:
+            sock.close()
+            raise
         sock.listen(4)
         sock.settimeout(0.25)
         self._listener = sock
@@ -40,6 +47,8 @@ class Server:
         self._thread.start()
 
     def stop(self):
+        """Shut everything down in about a second at most (this runs on Blender's main thread)."""
+        deadline = time.monotonic() + 1.5
         self._stop.set()
         if self._listener is not None:
             try:
@@ -53,10 +62,9 @@ class Server:
                 c.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-        if self._thread is not None:
-            self._thread.join(timeout=3.0)
-        for t in list(self._threads):
-            t.join(timeout=2.0)
+        for t in [self._thread] + list(self._threads):
+            if t is not None:
+                t.join(timeout=max(0.0, deadline - time.monotonic()))
         try:
             if os.path.exists(self.path) or os.path.islink(self.path):
                 os.unlink(self.path)
@@ -73,7 +81,7 @@ class Server:
                 break
             conn.settimeout(0.5)
             with self._conns_lock:
-                if len(self._conns) >= MAX_CONNECTIONS:
+                if len(self._conns) >= self.max_connections:
                     # Same-user clients only, but still bound the thread count.
                     self._send(conn, protocol.err(None, protocol.BUSY, "too many connections"))
                     conn.close()
@@ -95,8 +103,11 @@ class Server:
     def _serve(self, conn):
         buf = b""
         greeted = False
+        last_activity = time.monotonic()  # time of the last *complete* request (or of connecting)
         try:
             while not self._stop.is_set():
+                if time.monotonic() - last_activity > self.idle_timeout:
+                    return  # idle (or stalled mid-line): free the slot
                 try:
                     chunk = conn.recv(65536)
                 except socket.timeout:
@@ -122,6 +133,7 @@ class Server:
                     greeted = self._handle_line(conn, line, greeted)
                     if greeted is None:
                         return
+                    last_activity = time.monotonic()
         finally:
             with self._conns_lock:
                 self._conns.discard(conn)
@@ -146,13 +158,19 @@ class Server:
             self._send(conn, protocol.err(req_id, protocol.PROTOCOL_ERROR, "send 'hello' first"))
             return None
         timeout = req.get("timeout_s", protocol.DEFAULT_TIMEOUT_S)
-        if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or timeout <= 0:
-            timeout = protocol.DEFAULT_TIMEOUT_S
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            self._send(conn, protocol.err(req_id, protocol.INVALID_ARGUMENT, "timeout_s must be a finite number > 0"))
+            return greeted
         pending = self.dispatcher.submit(req)
         if pending is None:
             resp = protocol.err(
                 req_id, protocol.BUSY, "Blender is still working on a previous request; retry shortly"
             )
         else:
-            resp = self.dispatcher.wait(pending, min(float(timeout), 3600.0))
+            resp = self.dispatcher.wait(pending, min(float(timeout), 3600.0), self._stop)
         return greeted if self._send(conn, resp) else None

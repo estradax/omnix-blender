@@ -24,7 +24,12 @@ def default_socket_path():
 
 
 def prepare_socket_path(path):
-    """Validate ``path`` and its directory; remove a stale socket. Raises OmnixError on problems."""
+    """Validate ``path`` and its directory; remove a stale socket. Raises OmnixError on problems.
+
+    Directory policy (decision: refuse, never silently chmod someone's directory): the directory must be owned by
+    the current user, must not be a symlink, and must have no group/other permission bits (mode 0700). A missing
+    directory is created with mode 0700.
+    """
     if len(os.fsencode(path)) > MAX_SOCKET_PATH:
         raise OmnixError(
             INVALID_ARGUMENT,
@@ -32,17 +37,20 @@ def prepare_socket_path(path):
             % (len(os.fsencode(path)), MAX_SOCKET_PATH),
         )
     directory = os.path.dirname(os.path.abspath(path))
+    if os.path.islink(directory):
+        raise OmnixError(INVALID_ARGUMENT, "socket directory %s is a symlink; refusing to use it" % directory)
     if not os.path.isdir(directory):
         os.makedirs(os.path.dirname(directory), exist_ok=True)
         os.mkdir(directory, 0o700)
-    st = os.stat(directory)
+        os.chmod(directory, 0o700)  # independent of the umask
+    st = os.lstat(directory)
     if hasattr(os, "getuid") and st.st_uid != os.getuid():
         raise OmnixError(INVALID_ARGUMENT, "socket directory %s is not owned by you; refusing to start" % directory)
-    if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+    if stat.S_IMODE(st.st_mode) & 0o077:
         raise OmnixError(
             INVALID_ARGUMENT,
-            "socket directory %s is group/world writable (mode %o); chmod 700 it or choose another path"
-            % (directory, stat.S_IMODE(st.st_mode)),
+            "socket directory %s has mode %o but must be private (700): run `chmod 700 %s` or choose another path"
+            % (directory, stat.S_IMODE(st.st_mode), directory),
         )
     try:
         st = os.lstat(path)
@@ -54,12 +62,17 @@ def prepare_socket_path(path):
     probe.settimeout(1.0)
     try:
         probe.connect(path)
-    except (ConnectionRefusedError, FileNotFoundError):
-        os.unlink(path)  # stale socket left by a crashed run
+    except FileNotFoundError:
         return
-    except OSError:
-        os.unlink(path)
+    except ConnectionRefusedError:
+        os.unlink(path)  # nobody is listening: stale socket left by a crashed run
         return
+    except OSError as exc:  # timeout (e.g. a live listener with a full backlog), EACCES, ...
+        raise OmnixError(
+            INVALID_ARGUMENT,
+            "cannot tell whether %s is still in use (%s: %s); not deleting it. Remove it by hand if it is stale"
+            % (path, type(exc).__name__, exc),
+        )
     finally:
         probe.close()
     raise OmnixError(INVALID_ARGUMENT, "another Blender session is already listening on %s" % path)

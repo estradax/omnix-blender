@@ -28,6 +28,9 @@ pub struct Hello {
     pub features: Vec<String>,
     #[serde(default)]
     pub headless: bool,
+    /// Parameter names each add-on method accepts (used to check the Rust schemas stay in sync).
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 struct Conn {
@@ -88,6 +91,7 @@ impl Link {
                 addon: String::new(),
                 features: vec![],
                 headless: false,
+                params: Default::default(),
             },
         };
         let id = self.id();

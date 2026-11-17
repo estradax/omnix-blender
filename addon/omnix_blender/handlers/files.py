@@ -48,7 +48,7 @@ def _same_file(a, b):
     return bool(a) and bool(b) and os.path.realpath(a) == os.path.realpath(b)
 
 
-@method("save_file", mutating=False)
+@method("save_file", mutating=False, keys=("path", "overwrite", ))
 def save_file(params, ctx):
     raw = string(params, "path")
     overwrite = boolean(params, "overwrite", False)
@@ -71,7 +71,7 @@ def save_file(params, ctx):
     return {"file": bpy.data.filepath}
 
 
-@method("open_file")
+@method("open_file", keys=("path", "discard_changes", ))
 def open_file(params, ctx):
     path = pathpolicy.resolve(string(params, "path", required=True), ctx, "path")
     if not os.path.isfile(path):
@@ -85,7 +85,7 @@ def open_file(params, ctx):
     return {"file": bpy.data.filepath, "objects": len(bpy.context.scene.objects)}
 
 
-@method("new_file")
+@method("new_file", keys=("discard_changes", "empty", ))
 def new_file(params, ctx):
     _require_discard(params, "new_file", ctx)
     bpy.ops.wm.read_homefile(use_empty=boolean(params, "empty", False), load_ui=False)
@@ -119,7 +119,7 @@ def _op(module, name):
     return getattr(getattr(bpy.ops, module), name)
 
 
-@method("import_file", mutating=True)
+@method("import_file", mutating=True, keys=("path", "format", ))
 def import_file(params, ctx):
     path = pathpolicy.resolve(string(params, "path", required=True), ctx, "path")
     if not os.path.isfile(path):
@@ -163,7 +163,7 @@ def _snapshot(directory):
     return out
 
 
-@method("export_file")
+@method("export_file", keys=("path", "format", "selected_only", "overwrite", ))
 def export_file(params, ctx):
     raw = string(params, "path", required=True)
     overwrite = boolean(params, "overwrite", False)
@@ -209,11 +209,11 @@ def _step(op, params):
     return {"steps_requested": n, "steps_done": done, "objects": len(bpy.context.scene.objects)}
 
 
-@method("undo")
+@method("undo", keys=("steps", ))
 def undo(params, ctx):
     return _step(bpy.ops.ed.undo, params)
 
 
-@method("redo")
+@method("redo", keys=("steps", ))
 def redo(params, ctx):
     return _step(bpy.ops.ed.redo, params)

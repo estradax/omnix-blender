@@ -50,7 +50,7 @@ def scene_info(params, ctx):
     }
 
 
-@method("list_objects")
+@method("list_objects", keys=("type", "collection", "name_glob", "limit", "offset", ))
 def list_objects(params, ctx):
     limit = int_param(params, "limit", 100, 1, 1000)
     offset = int_param(params, "offset", 0, 0)

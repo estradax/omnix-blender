@@ -26,61 +26,44 @@ pub fn check_len(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Security checks on an existing socket: directory owned by us and not group/world writable; the socket
-/// itself not accessible by others. Returns a list of problems (empty when fine).
+/// Security checks on an existing socket for `doctor`: everything `untrusted_reason` finds, plus the socket's
+/// own mode. Returns a list of problems (empty when fine).
 pub fn permission_problems(path: &Path) -> Vec<String> {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let mut out = Vec::new();
-    let uid = unsafe { libc_getuid() };
-    if let Some(dir) = path.parent()
-        && let Ok(m) = std::fs::metadata(dir)
+    use std::os::unix::fs::PermissionsExt;
+    let mut out: Vec<String> = untrusted_reason(path).into_iter().collect();
+    if let Ok(m) = std::fs::symlink_metadata(path)
+        && m.permissions().mode() & 0o077 != 0
     {
-        if m.uid() != uid {
-            out.push(format!(
-                "socket directory {} is not owned by you",
-                dir.display()
-            ));
-        }
-        if m.permissions().mode() & 0o022 != 0 {
-            out.push(format!(
-                "socket directory {} is group/world writable (mode {:o})",
-                dir.display(),
-                m.permissions().mode() & 0o777
-            ));
-        }
-    }
-    if let Ok(m) = std::fs::symlink_metadata(path) {
-        if m.uid() != uid {
-            out.push("socket file is not owned by you".into());
-        }
-        if m.permissions().mode() & 0o077 != 0 {
-            out.push(format!(
-                "socket file is accessible by others (mode {:o}); expected 600",
-                m.permissions().mode() & 0o777
-            ));
-        }
+        out.push(format!(
+            "socket file is accessible by others (mode {:o}); expected 600",
+            m.permissions().mode() & 0o777
+        ));
     }
     out
 }
 
-/// Problems that make an existing socket untrustworthy for a client: it (or its directory) is not ours, or
-/// another user could have replaced it. Mode bits on the socket itself are only reported by `doctor`.
+/// Problems that make an existing socket untrustworthy for a client: its directory is a symlink, not ours, or
+/// accessible by group/others (same rule the add-on enforces), or the socket file is not ours.
 pub fn untrusted_reason(path: &Path) -> Option<String> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let uid = unsafe { libc_getuid() };
     if let Some(dir) = path.parent()
-        && let Ok(m) = std::fs::metadata(dir)
+        && let Ok(m) = std::fs::symlink_metadata(dir)
     {
+        if m.file_type().is_symlink() {
+            return Some(format!("socket directory {} is a symlink", dir.display()));
+        }
         if m.uid() != uid {
             return Some(format!(
                 "socket directory {} is not owned by you",
                 dir.display()
             ));
         }
-        if m.permissions().mode() & 0o022 != 0 {
+        if m.permissions().mode() & 0o077 != 0 {
             return Some(format!(
-                "socket directory {} is group/world writable; chmod 700 it",
-                dir.display()
+                "socket directory {} is accessible by group/others (mode {:o}); it must be private: chmod 700",
+                dir.display(),
+                m.permissions().mode() & 0o777
             ));
         }
     }

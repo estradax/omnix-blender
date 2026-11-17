@@ -17,7 +17,7 @@ def _principled(mat):
     return node
 
 
-@method("set_material", mutating=True)
+@method("set_material", mutating=True, keys=("object", "name", "base_color", "metallic", "roughness", "alpha", "emission", "emission_strength", "slot", ))
 def set_material(params, ctx):
     obj = get_object(params.get("object"))
     if obj.type not in MATERIAL_TYPES:
@@ -155,7 +155,7 @@ def _get_modifier(obj, name):
     return mod
 
 
-@method("add_modifier", mutating=True)
+@method("add_modifier", mutating=True, keys=("object", "type", "name", "properties", ))
 def add_modifier(params, ctx):
     obj = get_object(params.get("object"))
     mtype = params.get("type")
@@ -178,7 +178,7 @@ def add_modifier(params, ctx):
     return {"object": obj.name, "modifier": mod.name, "type": mod.type, "modifiers": [m.name for m in obj.modifiers]}
 
 
-@method("apply_modifier", mutating=True)
+@method("apply_modifier", mutating=True, keys=("object", "name", ))
 def apply_modifier(params, ctx):
     obj = get_object(params.get("object"))
     mod = _get_modifier(obj, params.get("name"))
@@ -193,7 +193,7 @@ def apply_modifier(params, ctx):
     return {"object": obj.name, "applied": name, "modifiers": [m.name for m in obj.modifiers]}
 
 
-@method("remove_modifier", mutating=True)
+@method("remove_modifier", mutating=True, keys=("object", "name", ))
 def remove_modifier(params, ctx):
     obj = get_object(params.get("object"))
     mod = _get_modifier(obj, params.get("name"))

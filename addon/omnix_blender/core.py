@@ -59,6 +59,7 @@ def start(
             "blender": bpy.app.version_string,
             "addon": ADDON_VERSION,
             "features": sorted(METHODS),
+            "params": {name: sorted(m.keys) for name, m in sorted(METHODS.items())},
             "headless": headless,
         }
         _initial_undo_step()

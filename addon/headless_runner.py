@@ -17,7 +17,7 @@ from omnix_blender import core  # noqa: E402
 from omnix_blender.dispatch import method  # noqa: E402
 
 
-@method("headless.shutdown")
+@method("headless.shutdown", keys=())
 def _shutdown(params, ctx):
     ctx.shutdown_requested = True
     return {"stopping": True}

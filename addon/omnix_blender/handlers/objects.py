@@ -50,7 +50,7 @@ def world_bbox(obj):
     return {"min": vec(loc), "max": vec(loc)}
 
 
-@method("get_object")
+@method("get_object", keys=("name", ))
 def get_object_info(params, ctx):
     obj = get_object(params.get("name"))
     out = describe(obj)
@@ -131,7 +131,7 @@ def _build_mesh(kind, size, segments):
     return bm
 
 
-@method("create_primitive", mutating=True)
+@method("create_primitive", mutating=True, keys=("type", "size", "segments", "name", "location", "rotation", "scale", "collection", ))
 def create_primitive(params, ctx):
     kind = enum_choice(params.get("type"), PRIMITIVES, "'type'")
     size = number(params, "size", 2.0, lo=1e-6, hi=1e6)
@@ -147,7 +147,7 @@ def create_primitive(params, ctx):
     return describe(obj)
 
 
-@method("create_object", mutating=True)
+@method("create_object", mutating=True, keys=("type", "name", "location", "rotation", "scale", "collection", "light_type", "energy", "color", "focal_length", "text", "size", ))
 def create_object(params, ctx):
     kind = enum_choice(params.get("type"), OBJECT_KINDS, "'type'")
     name = string(params, "name", kind.title())
@@ -184,7 +184,7 @@ def create_object(params, ctx):
     return describe(obj)
 
 
-@method("set_transform", mutating=True)
+@method("set_transform", mutating=True, keys=("names", "location", "rotation", "scale", "relative", ))
 def set_transform(params, ctx):
     objs = get_objects(name_list(params, "names"))
     loc, rot, scale = vec3(params, "location"), vec3(params, "rotation"), vec3(params, "scale")
@@ -202,7 +202,7 @@ def set_transform(params, ctx):
     return {"objects": [describe(o) for o in objs]}
 
 
-@method("delete_objects", mutating=True)
+@method("delete_objects", mutating=True, keys=("names", "purge_orphans", ))
 def delete_objects(params, ctx):
     objs = get_objects(name_list(params, "names"))
     names = [o.name for o in objs]
@@ -223,7 +223,7 @@ def _datablock_count():
     )
 
 
-@method("duplicate_object", mutating=True)
+@method("duplicate_object", mutating=True, keys=("name", "new_name", "linked", "offset", ))
 def duplicate_object(params, ctx):
     src = get_object(params.get("name"))
     new = src.copy()
@@ -239,7 +239,7 @@ def duplicate_object(params, ctx):
     return describe(new)
 
 
-@method("set_parent", mutating=True)
+@method("set_parent", mutating=True, keys=("children", "parent", "keep_transform", ))
 def set_parent(params, ctx):
     children = get_objects(name_list(params, "children"))
     pname = params.get("parent")
@@ -262,7 +262,7 @@ def set_parent(params, ctx):
     return {"parent": parent.name if parent else None, "children": [c.name for c in children]}
 
 
-@method("select_objects")
+@method("select_objects", keys=("names", "mode", "make_active", ))
 def select_objects(params, ctx):
     mode = enum_choice(params.get("mode", "REPLACE"), {"REPLACE", "ADD", "REMOVE", "CLEAR"}, "'mode'")
     vl = bpy.context.view_layer
@@ -283,7 +283,7 @@ def select_objects(params, ctx):
     }
 
 
-@method("collection", mutating=True)
+@method("collection", mutating=True, keys=("action", "name", "parent", "objects", ))
 def collection(params, ctx):
     action = enum_choice(params.get("action"), {"CREATE", "MOVE", "LINK"}, "'action'")
     name = string(params, "name", required=True)

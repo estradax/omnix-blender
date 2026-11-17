@@ -7,6 +7,7 @@ import json
 import math
 
 PROTOCOL_VERSION = 1
+REQUEST_KEYS = frozenset({"v", "id", "method", "params", "timeout_s"})
 MAX_LINE = 16 * 1024 * 1024
 DEFAULT_TIMEOUT_S = 30.0
 # AF_UNIX sun_path is 104 bytes on macOS (103 usable); stay under that everywhere.
@@ -71,6 +72,9 @@ def decode_request(line):
         raise OmnixError(PROTOCOL_ERROR, "malformed JSON: %s" % exc)
     if not isinstance(msg, dict):
         raise OmnixError(PROTOCOL_ERROR, "request must be a JSON object")
+    unknown = sorted(set(msg) - REQUEST_KEYS)
+    if unknown:
+        raise OmnixError(PROTOCOL_ERROR, "unknown request field(s): %s" % ", ".join(map(str, unknown)))
     if msg.get("v") != PROTOCOL_VERSION:
         raise OmnixError(
             UNSUPPORTED,

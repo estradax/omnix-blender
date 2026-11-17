@@ -68,7 +68,7 @@ async fn refuses_a_group_or_world_writable_socket_directory() {
     std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o777)).unwrap();
     h.sock = open.join("b.sock");
     let e = h.try_spawn().unwrap_err();
-    assert!(e.contains("writable"), "{e}");
+    assert!(e.contains("must be private"), "{e}");
     assert!(!h.sock.exists());
     // The client side refuses such a socket too.
     let link = Link::new(&h.sock);
@@ -87,7 +87,7 @@ async fn client_refuses_an_untrusted_socket_directory() {
     );
     let e = Link::new(&f.path).hello().await.unwrap_err();
     assert!(matches!(e, LinkError::BadPath(_)), "{e:?}");
-    assert!(e.to_string().contains("writable"));
+    assert!(e.to_string().contains("accessible by group/others"));
 }
 
 #[tokio::test]

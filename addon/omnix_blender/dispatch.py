@@ -7,6 +7,7 @@ Socket threads call :meth:`Dispatcher.submit` and wait; Blender's main thread ca
 
 import queue
 import threading
+import time
 import traceback
 
 from . import protocol
@@ -17,18 +18,19 @@ METHODS = {}
 
 
 class Method:
-    def __init__(self, name, fn, mutating, undo_label):
+    def __init__(self, name, fn, mutating, undo_label, keys):
+        self.keys = keys  # accepted `params` keys (frozenset); anything else is rejected
         self.name = name
         self.fn = fn
         self.mutating = mutating
         self.undo_label = undo_label
 
 
-def method(name, mutating=False, undo_label=None):
+def method(name, mutating=False, undo_label=None, keys=()):
     """Register a handler ``fn(params, ctx) -> json-able``. Mutating handlers get one undo step."""
 
     def deco(fn):
-        METHODS[name] = Method(name, fn, mutating, undo_label or name)
+        METHODS[name] = Method(name, fn, mutating, undo_label or name, frozenset(keys))
         return fn
 
     return deco
@@ -81,12 +83,20 @@ class Dispatcher:
         self._queue.put(pending)
         return pending
 
-    def wait(self, pending, timeout_s):
-        """Wait for the result; on timeout cancel it if it has not started and return a timeout error."""
-        if pending.event.wait(timeout_s):
-            return pending.response
-        pending.cancelled = True
+    def wait(self, pending, timeout_s, stop=None):
+        """Wait for the result; on timeout (or when ``stop`` is set) cancel it if it has not started."""
         req_id = pending.req.get("id")
+        deadline = time.monotonic() + timeout_s
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if pending.event.wait(min(0.1, remaining)):
+                return pending.response
+            if stop is not None and stop.is_set():
+                pending.cancelled = True
+                return protocol.err(req_id, protocol.DISABLED, "the Omnix server in Blender is stopping")
+        pending.cancelled = True
         if pending.started:
             msg = (
                 "request '%s' exceeded %.0fs and is still running in Blender (it cannot be interrupted); "
@@ -126,8 +136,13 @@ class Dispatcher:
         m = METHODS.get(name)
         if m is None:
             return protocol.err(req_id, protocol.UNSUPPORTED, "unknown method '%s'" % name)
-        import time
-
+        extra = sorted(set(req["params"]) - m.keys)
+        if extra:
+            return protocol.err(
+                req_id,
+                protocol.INVALID_ARGUMENT,
+                "unknown parameter(s) for %s: %s (accepted: %s)" % (name, ", ".join(map(str, extra)), ", ".join(sorted(m.keys)) or "none"),
+            )
         self.ctx.last_request = (name, time.time())
         try:
             self.ctx.skip_undo = False
