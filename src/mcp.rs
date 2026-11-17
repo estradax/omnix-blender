@@ -34,6 +34,7 @@ pub struct OmnixBlender {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ListObjectsArgs {
     /// Only objects of this type, e.g. MESH, CAMERA, LIGHT, EMPTY, CURVE, FONT.
     #[serde(rename = "type")]
@@ -49,6 +50,7 @@ pub struct ListObjectsArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RunPythonArgs {
     /// Python source to execute inside Blender (bpy, bmesh, mathutils are in scope). Assign to `result` to return a JSON-able value.
     pub code: String,
@@ -61,12 +63,14 @@ pub struct RunPythonArgs {
 type Vec3 = [f64; 3];
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct NameArg {
     /// Object name (case-sensitive).
     pub name: String,
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreatePrimitiveArgs {
     /// cube, uv_sphere, ico_sphere, cylinder, cone, torus, plane, circle or monkey.
     #[serde(rename = "type")]
@@ -86,6 +90,7 @@ pub struct CreatePrimitiveArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateObjectArgs {
     /// empty, camera, light, text or curve.
     #[serde(rename = "type")]
@@ -111,6 +116,7 @@ pub struct CreateObjectArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SetTransformArgs {
     /// Objects to change.
     pub names: Vec<String>,
@@ -123,6 +129,7 @@ pub struct SetTransformArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct DeleteObjectsArgs {
     pub names: Vec<String>,
     /// Also purge datablocks (meshes, materials...) left unused (default false).
@@ -130,6 +137,7 @@ pub struct DeleteObjectsArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct DuplicateArgs {
     pub name: String,
     pub new_name: Option<String>,
@@ -140,6 +148,7 @@ pub struct DuplicateArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SetParentArgs {
     pub children: Vec<String>,
     /// Parent object name; omit or null to clear the parent.
@@ -149,6 +158,7 @@ pub struct SetParentArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SelectArgs {
     /// Objects to select (not needed for mode=clear).
     pub names: Option<Vec<String>>,
@@ -159,6 +169,7 @@ pub struct SelectArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CollectionArgs {
     /// create, move (unlink from other collections) or link.
     pub action: String,
@@ -171,6 +182,7 @@ pub struct CollectionArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SetMaterialArgs {
     /// Object to assign the material to.
     pub object: String,
@@ -190,6 +202,7 @@ pub struct SetMaterialArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct AddModifierArgs {
     pub object: String,
     /// Modifier type, e.g. SUBSURF, BEVEL, MIRROR, ARRAY, BOOLEAN, SOLIDIFY, DECIMATE, TRIANGULATE.
@@ -201,6 +214,7 @@ pub struct AddModifierArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ModifierRefArgs {
     pub object: String,
     /// Modifier name (see get_object).
@@ -208,6 +222,7 @@ pub struct ModifierRefArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RenderSettingsArgs {
     /// BLENDER_EEVEE, CYCLES or BLENDER_WORKBENCH.
     pub engine: Option<String>,
@@ -221,6 +236,7 @@ pub struct RenderSettingsArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RenderImageArgs {
     /// Camera object to render from (default: the scene camera).
     pub camera: Option<String>,
@@ -236,6 +252,7 @@ pub struct RenderImageArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ScreenshotArgs {
     /// Longest edge of the returned image in pixels (default 1280).
     #[serde(skip_serializing)]
@@ -243,12 +260,14 @@ pub struct ScreenshotArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SaveFileArgs {
     /// Where to save (.blend added if missing). Omit to save to the current file.
     pub path: Option<String>,
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct OpenFileArgs {
     pub path: String,
     /// Required to open when the current file has unsaved changes (they are lost).
@@ -256,6 +275,7 @@ pub struct OpenFileArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct NewFileArgs {
     /// Required when the current file has unsaved changes (they are lost).
     pub discard_changes: Option<bool>,
@@ -264,6 +284,7 @@ pub struct NewFileArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ImportFileArgs {
     pub path: String,
     /// obj, stl, ply, usd, abc, fbx or gltf (glb). Inferred from the extension when omitted.
@@ -271,6 +292,7 @@ pub struct ImportFileArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ExportFileArgs {
     /// Destination; an existing file is overwritten. The directory must exist.
     pub path: String,
@@ -281,6 +303,7 @@ pub struct ExportFileArgs {
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct StepsArgs {
     /// Number of undo/redo steps (1-100, default 1).
     pub steps: Option<u32>,

@@ -63,6 +63,33 @@ pub fn permission_problems(path: &Path) -> Vec<String> {
     out
 }
 
+/// Problems that make an existing socket untrustworthy for a client: it (or its directory) is not ours, or
+/// another user could have replaced it. Mode bits on the socket itself are only reported by `doctor`.
+pub fn untrusted_reason(path: &Path) -> Option<String> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let uid = unsafe { libc_getuid() };
+    if let Some(dir) = path.parent()
+        && let Ok(m) = std::fs::metadata(dir)
+    {
+        if m.uid() != uid {
+            return Some(format!(
+                "socket directory {} is not owned by you",
+                dir.display()
+            ));
+        }
+        if m.permissions().mode() & 0o022 != 0 {
+            return Some(format!(
+                "socket directory {} is group/world writable; chmod 700 it",
+                dir.display()
+            ));
+        }
+    }
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.uid() != uid => Some("socket file is not owned by you".into()),
+        _ => None,
+    }
+}
+
 unsafe extern "C" {
     #[link_name = "getuid"]
     fn libc_getuid() -> u32;

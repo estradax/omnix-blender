@@ -8,6 +8,9 @@ from . import paths, protocol
 from .protocol import OmnixError
 
 
+MAX_CONNECTIONS = 8
+
+
 class Server:
     def __init__(self, path, dispatcher, info):
         self.path = path
@@ -17,6 +20,7 @@ class Server:
         self._thread = None
         self._stop = threading.Event()
         self._conns = set()
+        self._threads = []
         self._conns_lock = threading.Lock()
         self.connections_served = 0
 
@@ -51,6 +55,8 @@ class Server:
                 pass
         if self._thread is not None:
             self._thread.join(timeout=3.0)
+        for t in list(self._threads):
+            t.join(timeout=2.0)
         try:
             if os.path.exists(self.path) or os.path.islink(self.path):
                 os.unlink(self.path)
@@ -67,9 +73,17 @@ class Server:
                 break
             conn.settimeout(0.5)
             with self._conns_lock:
+                if len(self._conns) >= MAX_CONNECTIONS:
+                    # Same-user clients only, but still bound the thread count.
+                    self._send(conn, protocol.err(None, protocol.BUSY, "too many connections"))
+                    conn.close()
+                    continue
                 self._conns.add(conn)
+                self._threads = [t for t in self._threads if t.is_alive()]
+                t = threading.Thread(target=self._serve, args=(conn,), name="omnix-conn", daemon=True)
+                self._threads.append(t)
             self.connections_served += 1
-            threading.Thread(target=self._serve, args=(conn,), name="omnix-conn", daemon=True).start()
+            t.start()
 
     def _send(self, conn, message):
         try:
@@ -122,8 +136,8 @@ class Server:
             req = protocol.decode_request(line)
         except OmnixError as exc:
             self._send(conn, protocol.err(None, exc.code, exc.message))
-            # A version mismatch or garbage before hello ends the conversation; garbage after is survivable.
-            return greeted if (greeted and exc.code == protocol.PROTOCOL_ERROR) else None
+            # A version mismatch, or any bad request before hello, ends the conversation; later errors do not.
+            return None if (not greeted or exc.code == protocol.UNSUPPORTED) else greeted
         req_id = req.get("id")
         if req["method"] == "hello":
             self._send(conn, protocol.ok(req_id, dict(self.info)))

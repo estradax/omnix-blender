@@ -6,7 +6,7 @@ description = "An MCP server that controls a live Blender session through a smal
 license = "MIT OR Apache-2.0"
 publish = false
 keywords = ["mcp", "blender", "model-context-protocol"]
-exclude = ["/docs/", "/tests/"]
+exclude = ["/docs/", "/tests/", "__pycache__", "*.pyc"]
 
 [dependencies]
 anyhow = "1.0.104"

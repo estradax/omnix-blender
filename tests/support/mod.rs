@@ -35,10 +35,13 @@ macro_rules! require_blender {
 
 /// Short private temp dir under /tmp (AF_UNIX paths are limited to 103 bytes; mkdtemp creates it 0700).
 pub fn short_tempdir() -> tempfile::TempDir {
-    tempfile::Builder::new()
+    use std::os::unix::fs::PermissionsExt;
+    let d = tempfile::Builder::new()
         .prefix("obt")
         .tempdir_in("/tmp")
-        .expect("tempdir")
+        .expect("tempdir");
+    std::fs::set_permissions(d.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    d
 }
 
 pub fn addon_dir() -> PathBuf {
@@ -81,6 +84,7 @@ impl Harness {
         let mut c = Command::new(bin);
         c.env("BLENDER_USER_RESOURCES", self.dir.path().join("res"))
             .env("BLENDER_USER_SCRIPTS", self.dir.path().join("scripts"))
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .env_remove("OMNIX_BLENDER_SOCKET")
             .env_remove("OMNIX_BLENDER_ALLOW_RUN_PYTHON");
         c
@@ -289,6 +293,10 @@ pub mod fake {
         pub fn start(path: &Path, handler: Handler) -> Self {
             let _ = std::fs::remove_file(path);
             let listener = UnixListener::bind(path).unwrap();
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+            }
             let seen: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let hello_v = Arc::new(Mutex::new(1u64));
             let (s2, h2) = (seen.clone(), hello_v.clone());
@@ -362,6 +370,135 @@ pub mod fake {
                 c.abort();
             }
             let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+/// An isolated Blender resource environment for tests that use the *installed* extension.
+pub struct ExtEnv {
+    pub dir: tempfile::TempDir,
+    pub sock: PathBuf,
+    pub bin: PathBuf,
+}
+
+impl ExtEnv {
+    pub fn new(bin: &Path) -> Self {
+        let dir = short_tempdir();
+        let sock = dir.path().join("e.sock");
+        ExtEnv {
+            dir,
+            sock,
+            bin: bin.to_path_buf(),
+        }
+    }
+
+    pub fn apply(&self, c: &mut Command) {
+        c.env("BLENDER_USER_RESOURCES", self.dir.path().join("res"))
+            .env("BLENDER_USER_SCRIPTS", self.dir.path().join("scripts"))
+            .env("OMNIX_BLENDER_BIN", &self.bin)
+            .env("OMNIX_BLENDER_SOCKET", &self.sock);
+    }
+
+    /// Run the built `omnix-blender` binary with this environment.
+    pub fn omnix(&self, args: &[&str]) -> std::process::Output {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_omnix-blender"));
+        c.args(args);
+        self.apply(&mut c);
+        c.output().expect("run omnix-blender")
+    }
+
+    /// Start Blender running `script` (no --factory-startup, so the installed extension can load).
+    pub fn spawn_script(&self, script: &str, background: bool, extra: &[(&str, &str)]) -> Session {
+        let log = self
+            .dir
+            .path()
+            .join(format!("{}.log", script.replace('.', "_")));
+        let out = std::fs::File::create(&log).unwrap();
+        let err = out.try_clone().unwrap();
+        let stop = self.dir.path().join("stop.flag");
+        let _ = std::fs::remove_file(&stop);
+        let mut c = Command::new(&self.bin);
+        self.apply(&mut c);
+        c.env("OMNIX_TEST_STOP", &stop);
+        for (k, v) in extra {
+            c.env(k, v);
+        }
+        if background {
+            c.arg("--background");
+        }
+        c.arg("--python").arg(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/support")
+                .join(script),
+        );
+        let child = c.stdout(out).stderr(err).spawn().expect("spawn blender");
+        Session {
+            child: Some(child),
+            log,
+            stop,
+        }
+    }
+}
+
+pub struct Session {
+    child: Option<Child>,
+    pub log: PathBuf,
+    pub stop: PathBuf,
+}
+
+impl Session {
+    pub fn text(&self) -> String {
+        std::fs::read_to_string(&self.log).unwrap_or_default()
+    }
+
+    /// Wait until the log contains `marker`; panics with the log on exit/timeout/failure marker.
+    pub fn wait_for(&mut self, marker: &str, fail_marker: &str, secs: u64) {
+        let start = Instant::now();
+        loop {
+            let t = self.text();
+            assert!(!t.contains(fail_marker), "session failed:\n{t}");
+            if t.contains(marker) {
+                return;
+            }
+            if let Some(st) = self.child.as_mut().unwrap().try_wait().unwrap() {
+                panic!("blender exited ({st}) before '{marker}':\n{t}");
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(secs),
+                "timeout waiting for '{marker}':\n{t}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    pub fn wait_exit(&mut self, secs: u64) -> std::process::ExitStatus {
+        let mut child = self.child.take().unwrap();
+        let start = Instant::now();
+        loop {
+            if let Some(st) = child.try_wait().unwrap() {
+                return st;
+            }
+            if start.elapsed() > Duration::from_secs(secs) {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("blender did not exit:\n{}", self.text());
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    /// Ask the session to finish (flag file) and wait for Blender to exit.
+    pub fn finish(&mut self) -> std::process::ExitStatus {
+        std::fs::write(&self.stop, b"stop").unwrap();
+        self.wait_exit(60)
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        if let Some(mut c) = self.child.take() {
+            let _ = c.kill();
+            let _ = c.wait();
         }
     }
 }

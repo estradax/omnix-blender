@@ -62,6 +62,9 @@ impl Link {
 
     async fn connect(&self) -> Result<Conn, LinkError> {
         paths::check_len(&self.path).map_err(LinkError::BadPath)?;
+        if let Some(why) = paths::untrusted_reason(&self.path) {
+            return Err(LinkError::BadPath(format!("refusing to connect: {why}")));
+        }
         let stream =
             match tokio::time::timeout(CONNECT_TIMEOUT, UnixStream::connect(&self.path)).await {
                 Err(_) => return Err(LinkError::Timeout(CONNECT_TIMEOUT)),
@@ -128,7 +131,10 @@ impl Link {
         timeout: Duration,
         safe_retry: bool,
     ) -> Result<Value, LinkError> {
-        let mut guard = self.conn.lock().await;
+        // Requests are serialised; do not wait longer than the caller's own budget for our turn.
+        let mut guard = tokio::time::timeout(timeout, self.conn.lock())
+            .await
+            .map_err(|_| LinkError::Timeout(timeout))?;
         // Drop a connection the peer already closed (Blender restarted) so we reconnect instead of failing.
         if let Some(c) = guard.as_mut()
             && let Ok(Ok(buf)) = tokio::time::timeout(Duration::ZERO, c.reader.fill_buf()).await
