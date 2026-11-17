@@ -51,6 +51,7 @@ class Context:
         self.headless = headless
         self.shutdown_requested = False
         self.last_request = None  # (method, time) for the UI
+        self.dirty = False  # unsaved changes made through this add-on
         self.skip_undo = False  # a mutating handler may ask to skip its undo step (run_python undo=false)
 
 
@@ -124,6 +125,7 @@ class Dispatcher:
             self.ctx.skip_undo = False
             result = m.fn(req["params"], self.ctx)
             if m.mutating and not self.ctx.skip_undo:
+                self.ctx.dirty = True
                 _undo_push(m.undo_label)
             return protocol.ok(req_id, result)
         except OmnixError as exc:

@@ -49,6 +49,7 @@ def start(path=None, allow_run_python=lambda: False, headless=False, use_timer=T
             "features": sorted(METHODS),
             "headless": headless,
         }
+        _initial_undo_step()
         server = Server(path, _dispatcher, info)
         server.start()
         _server = server
@@ -91,3 +92,13 @@ def stop():
         if server is not None:
             server.stop()
         _dispatcher = None
+
+
+def _initial_undo_step():
+    """Make sure the state at start is an undo target (headless sessions have no 'original' step)."""
+    import bpy
+
+    try:
+        bpy.ops.ed.undo_push(message="Omnix: start")
+    except Exception:  # noqa: BLE001
+        pass

@@ -56,17 +56,25 @@ pub struct Harness {
 
 impl Harness {
     pub fn start(bin: &Path, allow_run_python: bool) -> Self {
+        let mut h = Self::unstarted(bin, allow_run_python);
+        h.spawn();
+        h
+    }
+
+    pub fn unstarted(bin: &Path, allow_run_python: bool) -> Self {
         let dir = short_tempdir();
         let sock = dir.path().join("b.sock");
-        let mut h = Harness {
+        Harness {
             dir,
             sock,
             bin: bin.to_path_buf(),
             allow_run_python,
             child: None,
-        };
-        h.spawn();
-        h
+        }
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.child.as_ref().expect("running").id()
     }
 
     pub fn blender_command(&self, bin: &Path) -> Command {
@@ -79,6 +87,13 @@ impl Harness {
     }
 
     pub fn spawn(&mut self) {
+        if let Err(e) = self.try_spawn() {
+            panic!("{e}");
+        }
+    }
+
+    /// Start Blender and wait for the add-on to report ready; Err(log) if Blender exits first.
+    pub fn try_spawn(&mut self) -> Result<(), String> {
         let _ = std::fs::remove_file(self.dir.path().join("out.txt"));
         let out = std::fs::File::create(self.dir.path().join("out.txt")).unwrap();
         let err = out.try_clone().unwrap();
@@ -100,7 +115,8 @@ impl Harness {
                 break;
             }
             if let Some(st) = self.child.as_mut().unwrap().try_wait().unwrap() {
-                panic!("blender exited early ({st}):\n{log}");
+                self.child = None;
+                return Err(format!("blender exited early ({st}):\n{log}"));
             }
             assert!(
                 start.elapsed() < Duration::from_secs(120),
@@ -108,6 +124,7 @@ impl Harness {
             );
             std::thread::sleep(Duration::from_millis(100));
         }
+        Ok(())
     }
 
     /// Ask Blender to quit cleanly via the headless-only method, then reap it.

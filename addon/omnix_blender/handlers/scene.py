@@ -6,7 +6,7 @@ import bpy
 
 from ..dispatch import method
 from ..protocol import INVALID_ARGUMENT, NOT_FOUND, OmnixError
-from .common import int_param, object_visible, vec
+from .common import int_param, object_visible, unsaved_changes, vec
 
 
 @method("status")
@@ -26,7 +26,7 @@ def scene_info(params, ctx):
         "blender": bpy.app.version_string,
         "scene": sc.name,
         "file": bpy.data.filepath or None,
-        "unsaved": bool(bpy.data.is_dirty) or not bpy.data.filepath,
+        "unsaved": unsaved_changes(ctx) or not bpy.data.filepath,
         "units": {
             "system": sc.unit_settings.system,
             "scale_length": sc.unit_settings.scale_length,
