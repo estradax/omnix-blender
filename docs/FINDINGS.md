@@ -4,9 +4,9 @@ Every answer below comes from a command run against `/Applications/Blender.app` 
 `--factory-startup` and `BLENDER_USER_RESOURCES` / `BLENDER_USER_SCRIPTS` pointing at a fresh temp directory.
 Probe scripts were throwaway files in that temp dir. Items marked **NOT VERIFIED** could not be tested without a human.
 
-## Summary of deviations from PLAN.md
+## Summary of deviations from the original plan (since removed)
 
-| PLAN.md says | Observed | What we do |
+| The plan said | Observed | What we do |
 |---|---|---|
 | `install-file` exit code signals failure | Exit code is **0** even for a missing zip or unknown repo. Only `remove` of a missing package exits 1. | Parse the `STATUS`/`ERROR` lines, not the exit code. |
 | Plan implies `--factory-startup` runs can load the add-on | `--factory-startup` ignores user prefs, so an installed+enabled extension is **not** loaded. | Tests load the add-on via `headless_runner.py` (adds the add-on dir to `sys.path`). |
