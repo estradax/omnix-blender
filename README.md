@@ -77,6 +77,6 @@ Known limits: a render or any long handler blocks Blender's UI and its single re
 `busy`, a timed-out request keeps running because Python cannot be interrupted); `unsaved` tracking is best effort
 (headless it counts changes made through the tools); `viewport_screenshot` needs the GUI.
 
-Design notes and deviations: [docs/DECISIONS.md](docs/DECISIONS.md). Measured facts about Blender 5.3: [docs/FINDINGS.md](docs/FINDINGS.md).
+Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Decisions and deviations: [docs/DECISIONS.md](docs/DECISIONS.md). Measured facts about Blender 5.3: [docs/FINDINGS.md](docs/FINDINGS.md).
 
 License: MIT OR Apache-2.0.

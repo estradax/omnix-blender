@@ -1,11 +1,13 @@
-# Decisions and deviations from PLAN.md
+# Decisions and deviations from the original plan
+
+The original planning document has been removed; the lasting design is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Reasons are in docs/FINDINGS.md where an observation drove the change.
 
 | Topic | Decision |
 |---|---|
 | hello | The client sends `hello` first (the add-on never speaks unsolicited). Anything else before `hello` is `protocol_error` and closes the connection. |
-| Error codes | PLAN's enum plus `protocol_error` (malformed JSON, missing hello). Rust adds client-side codes `not_connected`, `io_error`, `version_mismatch`, `bad_socket_path`. |
+| Error codes | The planned enum plus `protocol_error` (malformed JSON, missing hello). Rust adds client-side codes `not_connected`, `io_error`, `version_mismatch`, `bad_socket_path`. |
 | Envelope | Optional top-level `timeout_s` per request. A second request while one is outstanding returns `busy` (v1 is serial). |
 | Socket path length | Both sides reject paths over 103 bytes (macOS `sun_path` limit, measured). |
 | Extension install | `extension install-file -r user_default -e`; success is judged from the `STATUS` line because the exit code is 0 on failure (measured). Add-on embedded by `build.rs`, zipped at install time. |
