@@ -1,0 +1,26 @@
+[package]
+name = "omnix-blender"
+version = "0.1.0"
+edition = "2024"
+description = "An MCP server that controls a live Blender session through a small local add-on over a Unix socket."
+license = "MIT OR Apache-2.0"
+publish = false
+keywords = ["mcp", "blender", "model-context-protocol"]
+exclude = ["/docs/", "/tests/"]
+
+[dependencies]
+anyhow = "1.0.104"
+base64 = "0.23.1"
+clap = { version = "4.6.8", features = ["derive"] }
+dirs = "7.0.0"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+rmcp = { version = "3.10.0", features = ["server", "transport-io"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+tempfile = "3.27.0"
+thiserror = "2"
+tokio = { version = "1.54.1", features = ["full"] }
+zip = { version = "2.6.1", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+rmcp = { version = "3.10.0", features = ["client", "server", "transport-io", "transport-child-process"] }
