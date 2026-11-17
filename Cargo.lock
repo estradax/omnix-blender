@@ -708,6 +708,7 @@ dependencies = [
  "clap",
  "dirs",
  "image",
+ "libc",
  "rmcp",
  "serde",
  "serde_json",

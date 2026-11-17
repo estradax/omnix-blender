@@ -46,7 +46,7 @@ pub fn permission_problems(path: &Path) -> Vec<String> {
 /// accessible by group/others (same rule the add-on enforces), or the socket file is not ours.
 pub fn untrusted_reason(path: &Path) -> Option<String> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let uid = unsafe { libc_getuid() };
+    let uid = unsafe { libc::getuid() };
     if let Some(dir) = path.parent()
         && let Ok(m) = std::fs::symlink_metadata(dir)
     {
@@ -71,9 +71,4 @@ pub fn untrusted_reason(path: &Path) -> Option<String> {
         Ok(m) if m.uid() != uid => Some("socket file is not owned by you".into()),
         _ => None,
     }
-}
-
-unsafe extern "C" {
-    #[link_name = "getuid"]
-    fn libc_getuid() -> u32;
 }

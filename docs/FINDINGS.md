@@ -105,3 +105,11 @@ also present: `wm.collada_import/export`. FBX and glTF are bundled add-ons enabl
 ## 9. Other observations
 
 - Quitting the GUI via `bpy.ops.wm.quit_blender()` wrote a recovery `quit.blend` into the system temp dir.
+
+## Follow-up observations (review fixes)
+
+- `bpy.ops.wm.open_mainfile` honours the profile's `use_scripts_auto_execute`: with it enabled, a text block with
+  `use_module=True` ran during the load (reproduced headless); `use_scripts=False` prevents it.
+- Exporters (`wm.obj_export`) write side files next to the target (`.mtl`); they follow symlinks.
+- `tempfile.Builder::tempdir_in` creates directories with the umask-dependent mode (0755 here), not 0700; tests chmod explicitly.
+- macOS `/tmp` is a symlink to `/private/tmp`; resolved paths therefore differ from the paths callers pass.

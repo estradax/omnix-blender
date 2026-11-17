@@ -12,13 +12,7 @@ async fn setup() -> Option<(Harness, Client)> {
 }
 
 fn require_blender_opt() -> Option<std::path::PathBuf> {
-    let b = blender_bin();
-    if b.is_none() {
-        eprintln!(
-            "SKIP: Blender not found (install it or set OMNIX_BLENDER_BIN); skipping integration test"
-        );
-    }
-    b
+    blender_or_skip()
 }
 
 async fn finish(mut h: Harness, c: Client) {

@@ -102,20 +102,82 @@ async fn every_tool_forwards_to_the_addon_method_of_the_same_name() {
     let _ = c.cancel().await;
 }
 
-#[tokio::test]
-async fn render_image_refuses_paths_outside_the_private_render_dir() {
+fn tiny_png(path: &std::path::Path) {
+    image::RgbImage::new(4, 4).save(path).unwrap();
+}
+
+async fn render_via_fake(path: std::path::PathBuf) -> Out {
     let d = short_tempdir();
-    let evil = d.path().join("secret.png");
-    std::fs::write(&evil, b"not an image").unwrap();
-    let p = evil.to_str().unwrap().to_string();
+    let p = path.to_str().unwrap().to_string();
     let f = Fake::start(
         &d.path().join("f.sock"),
         Arc::new(move |_, _| Reply::Ok(json!({"path": p}))),
     );
     let c = connect_client(&f.path).await;
     let o = call(&c, "render_image", json!({})).await;
-    assert!(o.is_error);
-    assert!(o.text.contains("refusing"), "{}", o.text);
-    assert!(o.raw.content.iter().all(|b| b.as_image().is_none()));
     let _ = c.cancel().await;
+    o
+}
+
+fn render_dir_under(root: &std::path::Path, mode: u32) -> tempfile::TempDir {
+    use std::os::unix::fs::PermissionsExt;
+    let d = tempfile::Builder::new()
+        .prefix("omnix-render-")
+        .tempdir_in(root)
+        .unwrap();
+    std::fs::set_permissions(d.path(), std::fs::Permissions::from_mode(mode)).unwrap();
+    d
+}
+
+#[tokio::test]
+async fn render_image_accepts_only_files_in_a_private_render_dir_under_the_temp_dir() {
+    // Positive control: a correct private directory under the system temp dir is accepted.
+    let good = render_dir_under(&std::env::temp_dir(), 0o700);
+    tiny_png(&good.path().join("render_0001.png"));
+    let o = render_via_fake(good.path().join("render_0001.png")).await;
+    assert!(!o.is_error, "control must succeed: {}", o.text);
+    assert!(o.raw.content.iter().any(|b| b.as_image().is_some()));
+
+    // 1. Right name, right mode, but OUTSIDE the temp dir (inside the repo checkout).
+    let outside = render_dir_under(std::path::Path::new(env!("CARGO_MANIFEST_DIR")), 0o700);
+    tiny_png(&outside.path().join("a.png"));
+    let o = render_via_fake(outside.path().join("a.png")).await;
+    assert!(
+        o.is_error && o.text.contains("not under the system temp"),
+        "{}",
+        o.text
+    );
+    assert!(o.raw.content.iter().all(|b| b.as_image().is_none()));
+
+    // 2. Under the temp dir but with the wrong mode (others can read/replace files).
+    let loose = render_dir_under(&std::env::temp_dir(), 0o755);
+    tiny_png(&loose.path().join("a.png"));
+    let o = render_via_fake(loose.path().join("a.png")).await;
+    assert!(
+        o.is_error && o.text.contains("private (0700)"),
+        "{}",
+        o.text
+    );
+
+    // 3. A symlink inside a good directory pointing at a real image elsewhere.
+    let target = outside.path().join("a.png");
+    std::os::unix::fs::symlink(&target, good.path().join("link.png")).unwrap();
+    let o = render_via_fake(good.path().join("link.png")).await;
+    assert!(o.is_error, "symlink must be refused: {}", o.text);
+    assert!(o.raw.content.iter().all(|b| b.as_image().is_none()));
+
+    // 4. Wrong directory name under the temp dir.
+    let wrong = tempfile::Builder::new()
+        .prefix("notrender-")
+        .tempdir_in(std::env::temp_dir())
+        .unwrap();
+    tiny_png(&wrong.path().join("a.png"));
+    let o = render_via_fake(wrong.path().join("a.png")).await;
+    assert!(o.is_error && o.text.contains("omnix-render-"), "{}", o.text);
+
+    // 5. A directory instead of a file, and a non-image regular file.
+    std::fs::create_dir(good.path().join("sub.png")).unwrap();
+    assert!(render_via_fake(good.path().join("sub.png")).await.is_error);
+    std::fs::write(good.path().join("junk.png"), b"not an image").unwrap();
+    assert!(render_via_fake(good.path().join("junk.png")).await.is_error);
 }

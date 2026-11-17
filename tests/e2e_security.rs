@@ -202,22 +202,34 @@ async fn malformed_and_oversized_lines_do_not_crash_the_addon() {
     s.set_read_timeout(Some(Duration::from_secs(30))).unwrap();
     assert_eq!(roundtrip(&mut s, hello)["ok"], true);
     let chunk = vec![b'a'; 1024 * 1024];
-    let mut closed = false;
+    let mut reader = BufReader::new(s.try_clone().unwrap());
+    let mut sent = 0;
     for _ in 0..20 {
         if s.write_all(&chunk).is_err() {
-            closed = true;
-            break;
+            break; // the add-on closed the connection after answering
         }
+        sent += 1;
     }
-    let mut resp = String::new();
-    let _ = BufReader::new(s.try_clone().unwrap()).read_line(&mut resp);
     assert!(
-        closed || resp.contains("exceeds 16 MiB"),
-        "oversized line not rejected: {resp:?}"
+        sent >= 16,
+        "the add-on must accept up to 16 MiB before complaining (sent {sent} MiB)"
     );
-    assert!(resp.contains("invalid_argument"), "{resp:?}");
+    let mut resp = String::new();
+    reader.read_line(&mut resp).unwrap();
+    let r: Value = serde_json::from_str(&resp)
+        .unwrap_or_else(|e| panic!("no error response for the oversized line ({e}): {resp:?}"));
+    assert_eq!(r["ok"], false);
+    assert_eq!(r["error"]["code"], "invalid_argument");
+    assert!(
+        r["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("exceeds 16 MiB"),
+        "{r}"
+    );
     let mut rest = Vec::new();
-    let _ = s.read_to_end(&mut rest); // connection is closed by the add-on
+    let n = reader.read_to_end(&mut rest).unwrap_or(0);
+    assert_eq!(n, 0, "the connection must be closed after the error");
 
     // The add-on is still alive and serving.
     let c = h.client().await;
@@ -235,6 +247,10 @@ async fn the_addon_binds_no_tcp_port() {
         .args(["-nP", "-a", "-p", &pid])
         .output();
     let Ok(all) = all else {
+        assert!(
+            !require_mode(),
+            "OMNIX_BLENDER_REQUIRE=1 but lsof is not available, so the no-TCP check cannot run"
+        );
         eprintln!("SKIP: lsof not available");
         return;
     };

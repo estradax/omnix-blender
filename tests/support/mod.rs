@@ -20,15 +20,33 @@ pub fn blender_bin() -> Option<PathBuf> {
     omnix_blender::blender::find_blender()
 }
 
+/// True when `OMNIX_BLENDER_REQUIRE=1`: a missing Blender (or missing lsof) then FAILS the test run instead of
+/// skipping, so CI that is supposed to have Blender cannot go green vacuously.
+pub fn require_mode() -> bool {
+    std::env::var("OMNIX_BLENDER_REQUIRE").is_ok_and(|v| v == "1")
+}
+
+/// Blender, or None after printing a SKIP line. Panics instead of skipping when `OMNIX_BLENDER_REQUIRE=1`.
+pub fn blender_or_skip() -> Option<PathBuf> {
+    let b = blender_bin();
+    if b.is_none() {
+        assert!(
+            !require_mode(),
+            "OMNIX_BLENDER_REQUIRE=1 but Blender was not found (set OMNIX_BLENDER_BIN or install Blender)"
+        );
+        eprintln!(
+            "SKIP: Blender not found (install it or set OMNIX_BLENDER_BIN); skipping integration test"
+        );
+    }
+    b
+}
+
 #[macro_export]
 macro_rules! require_blender {
     () => {
-        match $crate::support::blender_bin() {
+        match $crate::support::blender_or_skip() {
             Some(b) => b,
-            None => {
-                eprintln!("SKIP: Blender not found (install it or set OMNIX_BLENDER_BIN); skipping integration test");
-                return;
-            }
+            None => return,
         }
     };
 }

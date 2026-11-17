@@ -681,28 +681,59 @@ async fn image_result(r: Result<Value, LinkError>, max_edge: u32) -> CallToolRes
     }
 }
 
-/// Read an image the add-on wrote. Only files inside the add-on's private `omnix-render-*` temp directory are
-/// accepted, so a bad response cannot make this server read arbitrary files.
+/// Read an image the add-on wrote, accepting only what the add-on itself creates: a regular file, owned by us,
+/// directly inside a private (`0700`, owned by us, not a symlink) `omnix-render-*` directory that lies under the
+/// system temp dir. The file is opened once with `O_NOFOLLOW` and checked through the open descriptor, so a swap
+/// between check and use cannot redirect the read. (The add-on and this server must share `TMPDIR`.)
 pub fn load_scaled_png(
     path: &std::path::Path,
     max_edge: u32,
 ) -> Result<(String, u32, u32), String> {
     use base64::Engine as _;
-    let dir_ok = path
-        .parent()
-        .and_then(|p| p.file_name())
+    use std::io::Read;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+    let uid = unsafe { libc::getuid() };
+    let refuse = |why: &str| Err(format!("refusing to read the image: {why}"));
+    let canon = std::fs::canonicalize(path).map_err(|e| format!("image missing: {e}"))?;
+    let temp =
+        std::fs::canonicalize(std::env::temp_dir()).map_err(|e| format!("no temp dir: {e}"))?;
+    let Some(dir) = canon.parent() else {
+        return refuse("no parent directory");
+    };
+    if !dir.starts_with(&temp) {
+        return refuse("it is not under the system temp directory");
+    }
+    if !dir
+        .file_name()
         .and_then(|n| n.to_str())
-        .is_some_and(|n| n.starts_with("omnix-render-"));
-    if !dir_ok {
-        return Err(
-            "refusing to read an image outside the add-on's private render directory".into(),
-        );
+        .is_some_and(|n| n.starts_with("omnix-render-"))
+    {
+        return refuse("it is not in an omnix-render-* directory");
     }
-    let md = std::fs::symlink_metadata(path).map_err(|e| format!("image missing: {e}"))?;
-    if !md.is_file() || md.len() > MAX_IMAGE_BYTES {
-        return Err("image is not a regular file or is too large".into());
+    let dmeta = std::fs::symlink_metadata(dir).map_err(|e| format!("directory missing: {e}"))?;
+    if !dmeta.is_dir() || dmeta.uid() != uid || dmeta.permissions().mode() & 0o777 != 0o700 {
+        return refuse("the render directory is not a private (0700) directory owned by you");
     }
-    let img = image::open(path).map_err(|e| format!("cannot decode image: {e}"))?;
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&canon)
+        .map_err(|e| format!("cannot open image: {e}"))?;
+    let fmeta = file
+        .metadata()
+        .map_err(|e| format!("cannot stat image: {e}"))?;
+    if !fmeta.is_file() || fmeta.uid() != uid {
+        return refuse("it is not a regular file owned by you");
+    }
+    if fmeta.len() > MAX_IMAGE_BYTES {
+        return refuse("it is too large");
+    }
+    let mut bytes = Vec::new();
+    (&mut file)
+        .take(MAX_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("cannot read image: {e}"))?;
+    let img = image::load_from_memory(&bytes).map_err(|e| format!("cannot decode image: {e}"))?;
     let img = if img.width().max(img.height()) > max_edge {
         img.resize(max_edge, max_edge, image::imageops::FilterType::Triangle)
     } else {

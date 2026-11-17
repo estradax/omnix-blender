@@ -50,6 +50,10 @@ Units are metres, Z-up; tool rotations are degrees. Every mutating call is one u
   The client refuses an untrusted socket directory. See [SECURITY.md](SECURITY.md).
 * Nothing executes before `hello` and the protocol version check. Lines are capped at 16 MiB.
 * `run_python` is remote code execution by design, hence off by default and re-checked on every call.
+* File tools only touch the saved `.blend`'s folder and the add-on preference *Allowed folders* (default empty), never
+  hidden paths or protected locations, never overwrite without `overwrite=true`, and `open_file` never runs embedded
+  scripts. To work in a folder: save the .blend there, add it under *Allowed folders* in the add-on preferences, or (less
+  safe) tick *Allow file access outside allowed folders*.
 
 ## Tested (and not)
 
@@ -59,6 +63,8 @@ found, `OMNIX_BLENDER_BIN` overrides discovery). The suite drives the real chain
 `BLENDER_USER_RESOURCES`/`BLENDER_USER_SCRIPTS`), asserting actual `bpy` state. Also: install/uninstall/enable/disable
 lifecycle with the installed extension, `doctor`, crash/reconnect, stale sockets, malformed/oversized input, no TCP
 listener, busy/timeout, and an omnix `read_only` policy run (skipped when `~/project/omnix/target/debug/omnix` is absent).
+Set `OMNIX_BLENDER_REQUIRE=1` in CI that is supposed to have Blender: a missing Blender (or `lsof`) then fails the run
+instead of skipping. Add-on socket/server unit tests run inside Blender (`tests/support/unit_addon.py`).
 One ignored test, `cargo test --test e2e_security -- --ignored gui_smoke`, opens a real Blender window for a few seconds
 (timer-driven pump, undo from a timer, screenshot, render, apply modifier, import/export, save).
 
