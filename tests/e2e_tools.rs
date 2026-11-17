@@ -583,7 +583,7 @@ async fn file_tools_save_open_new_with_unsaved_changes_guard() {
         json!({"type": "cube", "name": "Saved"}),
     )
     .await;
-    let path = h.dir.path().join("scene.blend");
+    let path = h.dir.path().canonicalize().unwrap().join("scene.blend");
     let r = ok(&c, "save_file", json!({"path": path.to_str().unwrap()})).await;
     assert_eq!(r["file"], path.to_str().unwrap());
     assert!(path.metadata().unwrap().len() > 1000);
@@ -625,7 +625,7 @@ async fn file_tools_save_open_new_with_unsaved_changes_guard() {
     err(
         &c,
         "open_file",
-        json!({"path": "/tmp/definitely/not/here.blend", "discard_changes": true}),
+        json!({"path": h.dir.path().join("nodir/here.blend").to_str().unwrap(), "discard_changes": true}),
         "not_found",
     )
     .await;
@@ -716,7 +716,7 @@ async fn import_export_round_trip_all_formats() {
     err(
         &c,
         "export_file",
-        json!({"path": "/tmp/no_such_dir_omnix/x.obj"}),
+        json!({"path": h.dir.path().join("nodir/x.obj").to_str().unwrap()}),
         "not_found",
     )
     .await;

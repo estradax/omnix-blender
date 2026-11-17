@@ -76,14 +76,24 @@ pub async fn run() -> Report {
                 )
                 .await
             {
-                Ok(s) => r.info(format!(
-                    "run_python is {}",
-                    if s["run_python_enabled"].as_bool() == Some(true) {
-                        "ENABLED"
-                    } else {
-                        "disabled (default)"
-                    }
-                )),
+                Ok(s) => {
+                    r.info(format!(
+                        "file access outside allowed folders is {}",
+                        if s["file_access_outside_allowed_folders"].as_bool() == Some(true) {
+                            "ENABLED"
+                        } else {
+                            "off (default)"
+                        }
+                    ));
+                    r.info(format!(
+                        "run_python is {}",
+                        if s["run_python_enabled"].as_bool() == Some(true) {
+                            "ENABLED"
+                        } else {
+                            "disabled (default)"
+                        }
+                    ))
+                }
                 Err(e) => r.fail(format!("status call failed: {e}")),
             }
         }

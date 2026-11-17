@@ -482,7 +482,15 @@ async fn gui_smoke() {
     let bin = require_blender!();
     let env = ExtEnv::new(&bin);
     assert!(env.omnix(&["install-addon"]).status.success());
-    let mut s = env.spawn_script("ext_session.py", false, &[("OMNIX_TEST_ALLOW", "0")]);
+    let folder = env.dir.path().to_str().unwrap().to_string();
+    let mut s = env.spawn_script(
+        "ext_session.py",
+        false,
+        &[
+            ("OMNIX_TEST_ALLOW", "0"),
+            ("OMNIX_TEST_FOLDERS", folder.as_str()),
+        ],
+    );
     s.wait_for("SESSION_READY", "SESSION_FAIL", 120);
     let c = connect_client(&env.sock).await;
     let info = ok(&c, "scene_info", json!({})).await;

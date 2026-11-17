@@ -54,6 +54,11 @@ pub struct Harness {
     pub sock: PathBuf,
     pub bin: PathBuf,
     pub allow_run_python: bool,
+    /// Folders the add-on may touch (default: the harness directory).
+    pub allowed_folders: Vec<PathBuf>,
+    pub allow_outside: bool,
+    /// HOME seen by Blender: a throwaway home with ~/.ssh and ~/Library/LaunchAgents inside.
+    pub home: PathBuf,
     child: Option<Child>,
 }
 
@@ -67,7 +72,13 @@ impl Harness {
     pub fn unstarted(bin: &Path, allow_run_python: bool) -> Self {
         let dir = short_tempdir();
         let sock = dir.path().join("b.sock");
+        let home = dir.path().join("home");
+        std::fs::create_dir_all(home.join(".ssh")).unwrap();
+        std::fs::create_dir_all(home.join("Library/LaunchAgents")).unwrap();
         Harness {
+            allowed_folders: vec![dir.path().to_path_buf()],
+            allow_outside: false,
+            home,
             dir,
             sock,
             bin: bin.to_path_buf(),
@@ -85,6 +96,7 @@ impl Harness {
         c.env("BLENDER_USER_RESOURCES", self.dir.path().join("res"))
             .env("BLENDER_USER_SCRIPTS", self.dir.path().join("scripts"))
             .env("PYTHONDONTWRITEBYTECODE", "1")
+            .env("HOME", &self.home)
             .env_remove("OMNIX_BLENDER_SOCKET")
             .env_remove("OMNIX_BLENDER_ALLOW_RUN_PYTHON");
         c
@@ -109,6 +121,12 @@ impl Harness {
             .arg(&self.sock);
         if self.allow_run_python {
             c.arg("--allow-run-python");
+        }
+        if self.allow_outside {
+            c.arg("--allow-outside-files");
+        }
+        for f in &self.allowed_folders {
+            c.arg("--allowed-folder").arg(f);
         }
         let child = c.stdout(out).stderr(err).spawn().expect("spawn blender");
         self.child = Some(child);

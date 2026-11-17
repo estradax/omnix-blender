@@ -27,6 +27,8 @@ def main():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     path = None
     allow = os.environ.get("OMNIX_BLENDER_ALLOW_RUN_PYTHON") == "1"
+    folders = [f for f in os.environ.get("OMNIX_BLENDER_ALLOWED_FOLDERS", "").split(os.pathsep) if f]
+    outside = os.environ.get("OMNIX_BLENDER_ALLOW_OUTSIDE") == "1"
     i = 0
     while i < len(argv):
         if argv[i] == "--socket":
@@ -34,8 +36,20 @@ def main():
             i += 1
         elif argv[i] == "--allow-run-python":
             allow = True
+        elif argv[i] == "--allow-outside-files":
+            outside = True
+        elif argv[i] == "--allowed-folder":
+            folders.append(argv[i + 1])
+            i += 1
         i += 1
-    core.start(path=path, allow_run_python=lambda: allow, headless=True, use_timer=False)
+    core.start(
+        path=path,
+        allow_run_python=lambda: allow,
+        headless=True,
+        use_timer=False,
+        allow_outside_files=lambda: outside,
+        allowed_folders=lambda: folders,
+    )
     print("OMNIX_READY %s" % core.socket_path(), flush=True)
     try:
         while not core.context().shutdown_requested:

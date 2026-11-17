@@ -5,6 +5,7 @@ import tempfile
 
 import bpy
 
+from .. import pathpolicy
 from ..dispatch import method
 from ..protocol import INVALID_ARGUMENT, OmnixError, UNSUPPORTED
 from .common import enum_choice, get_object, int_param, string
@@ -21,6 +22,10 @@ def _private_dir():
     if _render_dir is None or not os.path.isdir(_render_dir):
         _render_dir = tempfile.mkdtemp(prefix=RENDER_DIR_PREFIX)
     return _render_dir
+
+
+def render_dir_if_any():
+    return _render_dir if _render_dir and os.path.isdir(_render_dir) else None
 
 
 def _next_path(stem):
@@ -76,7 +81,13 @@ def set_render_settings(params, ctx):
         valid = {e.identifier for e in r.image_settings.bl_rna.properties["file_format"].enum_items}
         r.image_settings.file_format = enum_choice(params["output_format"], valid, "'output_format'")
     if "output_path" in params:
-        r.filepath = string(params, "output_path", required=True)
+        raw = string(params, "output_path", required=True)
+        if raw.startswith("//"):
+            if not bpy.data.filepath:
+                raise OmnixError(INVALID_ARGUMENT, "'output_path' is blend-relative (//) but the scene has not been saved")
+            raw = bpy.path.abspath(raw)
+        # The last component may be a frame pattern (render_####), so only its directory is resolved.
+        r.filepath = pathpolicy.resolve(raw, ctx, "output_path", allow_pattern_basename=True)
     return _settings(sc)
 
 

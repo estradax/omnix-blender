@@ -31,7 +31,14 @@ def context():
     return _ctx
 
 
-def start(path=None, allow_run_python=lambda: False, headless=False, use_timer=True):
+def start(
+    path=None,
+    allow_run_python=lambda: False,
+    headless=False,
+    use_timer=True,
+    allow_outside_files=lambda: False,
+    allowed_folders=lambda: [],
+):
     """Start listening. Raises OmnixError if the socket path is unusable."""
     import bpy
 
@@ -40,7 +47,12 @@ def start(path=None, allow_run_python=lambda: False, headless=False, use_timer=T
         if _server is not None:
             return _server.path
         path = path or paths.default_socket_path()
-        _ctx = Context(allow_run_python=allow_run_python, headless=headless)
+        _ctx = Context(
+            allow_run_python=allow_run_python,
+            headless=headless,
+            allow_outside_files=allow_outside_files,
+            allowed_folders=allowed_folders,
+        )
         _dispatcher = Dispatcher(_ctx)
         info = {
             "v": PROTOCOL_VERSION,

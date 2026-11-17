@@ -46,8 +46,16 @@ class Pending:
 class Context:
     """Per-process settings handlers can consult. ``allow_run_python`` is read on the main thread."""
 
-    def __init__(self, allow_run_python=lambda: False, headless=False):
+    def __init__(
+        self,
+        allow_run_python=lambda: False,
+        headless=False,
+        allow_outside_files=lambda: False,
+        allowed_folders=lambda: [],
+    ):
         self.allow_run_python = allow_run_python
+        self.allow_outside_files = allow_outside_files
+        self.allowed_folders = allowed_folders
         self.headless = headless
         self.shutdown_requested = False
         self.last_request = None  # (method, time) for the UI

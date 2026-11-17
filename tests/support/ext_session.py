@@ -23,6 +23,9 @@ if mod is None:
 core = importlib.import_module(MOD + ".core")
 prefs = bpy.context.preferences.addons[MOD].preferences
 prefs.allow_run_python = allow
+prefs.allow_outside_files = os.environ.get("OMNIX_TEST_ALLOW_OUTSIDE") == "1"
+for _f in [f for f in os.environ.get("OMNIX_TEST_FOLDERS", "").split(os.pathsep) if f]:
+    prefs.allowed_folders.add().path = _f
 
 
 def start():

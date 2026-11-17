@@ -4,6 +4,7 @@ import os
 
 import bpy
 
+from .. import pathpolicy
 from ..dispatch import method
 from ..protocol import INVALID_ARGUMENT, NOT_FOUND, OmnixError
 from .common import boolean, int_param, string, unsaved_changes
@@ -43,24 +44,28 @@ def _initial_undo_step():
         pass
 
 
-def _abs(path):
-    return os.path.abspath(os.path.expanduser(path))
+def _same_file(a, b):
+    return bool(a) and bool(b) and os.path.realpath(a) == os.path.realpath(b)
 
 
 @method("save_file", mutating=False)
 def save_file(params, ctx):
-    path = string(params, "path")
-    if path is None:
+    raw = string(params, "path")
+    overwrite = boolean(params, "overwrite", False)
+    if raw is None:
         if not bpy.data.filepath:
             raise OmnixError(INVALID_ARGUMENT, "the scene has never been saved; pass 'path' (e.g. /Users/me/scene.blend)")
+        pathpolicy.resolve(bpy.data.filepath, ctx, "current file")
         bpy.ops.wm.save_mainfile()
         ctx.dirty = False
         return {"file": bpy.data.filepath}
-    path = _abs(path)
-    if not path.lower().endswith(".blend"):
-        path += ".blend"
+    if not raw.lower().endswith(".blend"):
+        raw += ".blend"
+    path = pathpolicy.resolve(raw, ctx, "path")
     if not os.path.isdir(os.path.dirname(path)):
         raise OmnixError(NOT_FOUND, "directory does not exist: %s" % os.path.dirname(path))
+    if not _same_file(path, bpy.data.filepath):  # saving over the open file in place is the normal workflow
+        pathpolicy.require_writable_target(path, overwrite)
     bpy.ops.wm.save_as_mainfile(filepath=path)
     ctx.dirty = False
     return {"file": bpy.data.filepath}
@@ -68,11 +73,13 @@ def save_file(params, ctx):
 
 @method("open_file")
 def open_file(params, ctx):
-    path = _abs(string(params, "path", required=True))
+    path = pathpolicy.resolve(string(params, "path", required=True), ctx, "path")
     if not os.path.isfile(path):
         raise OmnixError(NOT_FOUND, "file does not exist: %s" % path)
     _require_discard(params, "open_file", ctx)
-    bpy.ops.wm.open_mainfile(filepath=path, load_ui=False)
+    # use_scripts=False: never run scripts embedded in the file (text blocks marked "register", drivers), even if
+    # the user's preferences trust auto-execution. A .blend from an untrusted source must not become code execution.
+    bpy.ops.wm.open_mainfile(filepath=path, load_ui=False, use_scripts=False)
     ctx.dirty = False
     _initial_undo_step()
     return {"file": bpy.data.filepath, "objects": len(bpy.context.scene.objects)}
@@ -88,15 +95,24 @@ def new_file(params, ctx):
 
 
 def _format_of(path, fmt):
+    """The format for ``path``. The extension must be known and must agree with an explicit ``format``."""
+    ext = os.path.splitext(path)[1].lower()
+    from_ext = EXT.get(ext)
+    if from_ext is None:
+        raise OmnixError(
+            INVALID_ARGUMENT,
+            "unsupported file extension '%s'; supported: %s" % (ext or "(none)", ", ".join(sorted(EXT))),
+        )
     if fmt is None:
-        fmt = EXT.get(os.path.splitext(path)[1].lower())
-        if fmt is None:
-            raise OmnixError(INVALID_ARGUMENT, "cannot infer the format from '%s'; pass 'format' (one of %s)" % (path, ", ".join(sorted(FORMATS))))
-    fmt = fmt.lower()
-    fmt = {"glb": "gltf", "usdc": "usd", "usda": "usd", "usdz": "usd"}.get(fmt, fmt)
-    if fmt not in FORMATS:
+        return from_ext
+    if not isinstance(fmt, str):
+        raise OmnixError(INVALID_ARGUMENT, "'format' must be a string")
+    given = {"glb": "gltf", "usdc": "usd", "usda": "usd", "usdz": "usd"}.get(fmt.lower(), fmt.lower())
+    if given not in FORMATS:
         raise OmnixError(INVALID_ARGUMENT, "unsupported format '%s'; supported: %s" % (fmt, ", ".join(sorted(FORMATS))))
-    return fmt
+    if given != from_ext:
+        raise OmnixError(INVALID_ARGUMENT, "format '%s' contradicts the file extension '%s' (which means '%s')" % (fmt, ext, from_ext))
+    return given
 
 
 def _op(module, name):
@@ -105,7 +121,7 @@ def _op(module, name):
 
 @method("import_file", mutating=True)
 def import_file(params, ctx):
-    path = _abs(string(params, "path", required=True))
+    path = pathpolicy.resolve(string(params, "path", required=True), ctx, "path")
     if not os.path.isfile(path):
         raise OmnixError(NOT_FOUND, "file does not exist: %s" % path)
     fmt = _format_of(path, params.get("format"))
@@ -121,23 +137,63 @@ def import_file(params, ctx):
     return {"format": fmt, "imported": new, "count": len(new)}
 
 
+def _expected_side_files(path, fmt):
+    stem, ext = os.path.splitext(path)
+    if fmt == "obj":
+        return [stem + ".mtl"]
+    if fmt == "gltf" and ext.lower() == ".gltf":
+        return [stem + ".bin"]
+    return []
+
+
+def _snapshot(directory):
+    out = {}
+    try:
+        with os.scandir(directory) as it:
+            for i, e in enumerate(it):
+                if i >= 5000:
+                    break
+                try:
+                    st = e.stat(follow_symlinks=False)
+                    out[e.name] = (st.st_mtime_ns, st.st_size)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return out
+
+
 @method("export_file")
 def export_file(params, ctx):
-    path = _abs(string(params, "path", required=True))
+    raw = string(params, "path", required=True)
+    overwrite = boolean(params, "overwrite", False)
+    path = pathpolicy.resolve(raw, ctx, "path")
     fmt = _format_of(path, params.get("format"))
-    if not os.path.isdir(os.path.dirname(path)):
-        raise OmnixError(NOT_FOUND, "directory does not exist: %s" % os.path.dirname(path))
+    directory = os.path.dirname(path)
+    if not os.path.isdir(directory):
+        raise OmnixError(NOT_FOUND, "directory does not exist: %s" % directory)
+    pathpolicy.require_writable_target(path, overwrite)
+    # Files the exporter writes next to the main file get the same checks (policy, symlinks, overwrite).
+    for side in _expected_side_files(path, fmt):
+        real_side = pathpolicy.resolve(side, ctx, "side file")
+        pathpolicy.require_writable_target(real_side, overwrite, "side file")
     _, _, module, exp, sel = FORMATS[fmt]
     kwargs = {"filepath": path}
     if boolean(params, "selected_only", False):
         kwargs[sel] = True
+    before = _snapshot(directory)
     try:
         res = _op(module, exp)(**kwargs)
     except RuntimeError as exc:
         raise OmnixError(INVALID_ARGUMENT, "export failed: %s" % str(exc).strip())
     if "FINISHED" not in res or not os.path.exists(path):
         raise OmnixError("blender_error", "export did not produce a file (%s)" % sorted(res))
-    return {"format": fmt, "path": path, "bytes": os.path.getsize(path)}
+    after = _snapshot(directory)
+    main = os.path.basename(path)
+    side_files = sorted(
+        os.path.join(directory, n) for n, sig in after.items() if n != main and before.get(n) != sig
+    )
+    return {"format": fmt, "path": path, "bytes": os.path.getsize(path), "side_files": side_files}
 
 
 def _step(op, params):

@@ -262,8 +262,10 @@ pub struct ScreenshotArgs {
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SaveFileArgs {
-    /// Where to save (.blend added if missing). Omit to save to the current file.
+    /// Where to save (.blend added if missing). Omit to save to the current file. Must be inside the .blend's folder or an allowed folder.
     pub path: Option<String>,
+    /// Replace an existing file at `path` (default false: refused).
+    pub overwrite: Option<bool>,
 }
 
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
@@ -294,10 +296,12 @@ pub struct ImportFileArgs {
 #[derive(Deserialize, serde::Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportFileArgs {
-    /// Destination; an existing file is overwritten. The directory must exist.
+    /// Destination; the directory must exist and be inside the .blend's folder or an allowed folder. The extension must match the format.
     pub path: String,
-    /// obj, stl, ply, usd, abc, fbx or gltf (glb). Inferred from the extension when omitted.
+    /// obj, stl, ply, usd, abc, fbx or gltf (glb). Inferred from the extension when omitted; must agree with it.
     pub format: Option<String>,
+    /// Replace an existing file (and side files such as .mtl); default false: refused.
+    pub overwrite: Option<bool>,
     /// Export only selected objects (default false).
     pub selected_only: Option<bool>,
 }
@@ -551,7 +555,7 @@ impl OmnixBlender {
     }
 
     #[tool(
-        description = "Save the scene (to `path`, or in place if it already has a file). Overwrites an existing file at `path`.",
+        description = "Save the scene (to `path`, or in place if it already has a file). Refuses to replace an existing file at `path` unless overwrite=true. Paths must be in the .blend's folder or an allowed folder.",
         annotations(read_only_hint = false, destructive_hint = true)
     )]
     async fn save_file(&self, Parameters(a): Parameters<SaveFileArgs>) -> CallToolResult {
@@ -592,7 +596,7 @@ impl OmnixBlender {
     }
 
     #[tool(
-        description = "Export the scene (or the selection) to obj, stl, ply, usd, abc, fbx or gltf/glb. Overwrites an existing file.",
+        description = "Export the scene (or the selection) to obj, stl, ply, usd, abc, fbx or gltf/glb. Refuses to replace existing files unless overwrite=true; reports side files (e.g. .mtl). Paths must be in the .blend's folder or an allowed folder.",
         annotations(read_only_hint = false, destructive_hint = true)
     )]
     async fn export_file(&self, Parameters(a): Parameters<ExportFileArgs>) -> CallToolResult {

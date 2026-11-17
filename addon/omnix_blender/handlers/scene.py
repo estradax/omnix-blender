@@ -15,6 +15,7 @@ def status(params, ctx):
         "blender": bpy.app.version_string,
         "headless": bool(bpy.app.background),
         "run_python_enabled": bool(ctx.allow_run_python()),
+        "file_access_outside_allowed_folders": bool(ctx.allow_outside_files()),
     }
 
 
