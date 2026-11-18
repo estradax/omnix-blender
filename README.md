@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo-light.svg" alt="omnix-blender" width="430">
+    <img src="assets/logo-light.svg" alt="omnix-blender" width="470">
   </picture>
 </p>
 
@@ -26,8 +26,11 @@ A Rust [MCP](https://modelcontextprotocol.io) server that controls a **live Blen
 pure-Python Blender add-on over a **Unix domain socket** (newline-delimited JSON). Works with any MCP client and sits
 behind [omnix](https://github.com/estradax/omnix) without special support. 
 
-```
-MCP client --stdio--> omnix-blender (Rust, rmcp) --Unix socket, NDJSON--> Blender add-on --main-thread queue--> bpy
+```mermaid
+flowchart LR
+    client["MCP client"] -- "stdio" --> server["omnix-blender<br/><sub>Rust, rmcp</sub>"]
+    server -- "Unix socket<br/>NDJSON" --> addon["Blender add-on<br/><sub>socket thread</sub>"]
+    addon -- "main-thread queue" --> bpy["bpy<br/><sub>pump() on main thread</sub>"]
 ```
 
 ## Install

@@ -14,5 +14,14 @@
   <path d="M90 28 V3 M90 14 a10 10 0 0 1 20 0 V28"/>
   <path d="M127 12 V28"/><circle cx="127" cy="0.5" r="4" fill="#F4F5F7" stroke="none"/>
   <path d="M144 3 L166 28 M166 3 L144 28"/>
-</g><text x="524" y="396" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="44" font-weight="600" fill="#FF5A1F">-blender</text><text x="524" y="456" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="29" fill="#A4AAB5">Drive a live Blender session over MCP.</text><text x="524" y="504" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="26" fill="#6F7683">Rust server · Unix socket · Python add-on</text>
+</g><g transform="translate(524 350) scale(1.7)" fill="none" stroke="#FF5A1F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M0 15.5 H12"/>
+  <path d="M24 -4 V28"/><circle cx="36.5" cy="15.5" r="12.5"/>
+  <path d="M62 -4 V28"/>
+  <path d="M75 15.5 H99 A12.5 12.5 0 1 0 95.84 24.34"/>
+  <path d="M114 28 V3 M114 14 a10 10 0 0 1 20 0 V28"/>
+  <circle cx="158" cy="15.5" r="12.5"/><path d="M170.5 -4 V28"/>
+  <path d="M183.5 15.5 H208.5 A12.5 12.5 0 1 0 205.34 24.34"/>
+  <path d="M221 3 V28 M221 15 a11 11 0 0 1 11 -10"/>
+</g><text x="524" y="474" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="29" fill="#A4AAB5">Drive a live Blender session over MCP.</text><text x="524" y="522" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="26" fill="#6F7683">Rust server · Unix socket · Python add-on</text>
 </svg>
