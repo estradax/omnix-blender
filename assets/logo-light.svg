@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="88" viewBox="0 0 560 88" role="img" aria-label="omnix-blender">
+<title>omnix-blender</title>
+<g transform="translate(2 6) scale(1.2)"><g fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <g stroke="#16181D" stroke-width="2.4" opacity=".6">
+    <path d="M5 13 L21.3 23.5"/><path d="M5 32 H21.3"/><path d="M5 51 L21.3 40.5"/>
+  </g>
+  <g fill="#16181D" stroke="none"><circle cx="5" cy="13" r="3.3"/><circle cx="5" cy="32" r="3.3"/><circle cx="5" cy="51" r="3.3"/></g>
+  <path d="M50.72 23.5 L36 15 L21.28 23.5 V40.5 L36 49 L50.72 40.5" stroke="#16181D" stroke-width="5.5"/>
+  <path d="M36 32 H62" stroke="#FF5A1F" stroke-width="5.5"/>
+  <circle cx="36" cy="32" r="5.4" fill="#FF5A1F" stroke="none"/>
+</g></g>
+<g transform="translate(104 22) scale(1.6)" fill="none" stroke="#16181D" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="14" cy="14" r="11"/>
+  <path d="M40 28 V3 M40 14 a8 8 0 0 1 16 0 V28 M56 14 a8 8 0 0 1 16 0 V28"/>
+  <path d="M90 28 V3 M90 14 a10 10 0 0 1 20 0 V28"/>
+  <path d="M127 12 V28"/><circle cx="127" cy="0.5" r="4" fill="#16181D" stroke="none"/>
+  <path d="M144 3 L166 28 M166 3 L144 28"/>
+</g>
+<text x="388" y="62" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="40" font-weight="600" fill="#FF5A1F">-blender</text>
+</svg>

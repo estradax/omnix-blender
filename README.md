@@ -1,8 +1,30 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" alt="omnix-blender" width="400">
+  </picture>
+</p>
+
+<p align="center">
+  <b>Drive a live Blender session over MCP.</b><br>
+  A Rust MCP server plus a small Python add-on, connected by a private Unix socket.<br>
+  Part of the <a href="https://github.com/estradax/omnix">omnix</a> family.
+</p>
+
+<p align="center">
+  <a href="https://github.com/estradax/omnix-blender/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/estradax/omnix-blender/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue">
+  <img alt="Blender 5.3" src="https://img.shields.io/badge/blender-5.3-orange">
+  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-orange">
+</p>
+
+---
+
 # omnix-blender
 
 A Rust [MCP](https://modelcontextprotocol.io) server that controls a **live Blender session**. It talks to a small
 pure-Python Blender add-on over a **Unix domain socket** (newline-delimited JSON). Works with any MCP client and sits
-behind [omnix](https://github.com/estradax/omnix) without special support. Private, local-only repository.
+behind [omnix](https://github.com/estradax/omnix) without special support. 
 
 ```
 MCP client --stdio--> omnix-blender (Rust, rmcp) --Unix socket, NDJSON--> Blender add-on --main-thread queue--> bpy
@@ -80,3 +102,7 @@ Known limits: a render or any long handler blocks Blender's UI and its single re
 Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Decisions and deviations: [docs/DECISIONS.md](docs/DECISIONS.md). Measured facts about Blender 5.3: [docs/FINDINGS.md](docs/FINDINGS.md).
 
 License: MIT OR Apache-2.0.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems as described in [SECURITY.md](SECURITY.md).

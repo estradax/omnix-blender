@@ -6,7 +6,7 @@ why a socket), `SECURITY.md` and `docs/DECISIONS.md` before changing anything.
 
 Rules:
 
-- Private, local-only repo. No remotes, no publishing.
+- Public open-source repo: github.com/estradax/omnix-blender (MIT OR Apache-2.0). No crates.io publishing (`publish = false`).
 - Blender is at `/Applications/Blender.app/Contents/MacOS/Blender`. Always run it with `--factory-startup` and an isolated
   `BLENDER_USER_RESOURCES` / `BLENDER_USER_SCRIPTS`, so the owner's real preferences and add-ons are never touched.
 - `bpy` is main-thread-only: socket threads must never import or touch it; all execution goes through `pump()`.

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "An MCP server that controls a live Blender session through a small local add-on over a Unix socket."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/estradax/omnix-blender"
 publish = false
 keywords = ["mcp", "blender", "model-context-protocol"]
 exclude = ["/docs/", "/tests/", "__pycache__", "*.pyc"]
