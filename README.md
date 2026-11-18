@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo-light.svg" alt="omnix-blender" width="400">
+    <img src="assets/logo-light.svg" alt="omnix-blender" width="430">
   </picture>
 </p>
 
