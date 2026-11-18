@@ -30,12 +30,16 @@ behind [omnix](https://github.com/estradax/omnix) without special support.
 MCP client --stdio--> omnix-blender (Rust, rmcp) --Unix socket, NDJSON--> Blender add-on --main-thread queue--> bpy
 ```
 
-## Install and try it
+## Install
+
+`omnix-blender` is a single Rust binary (the Blender add-on is embedded in it). It is not on crates.io.
 
 ```sh
-cargo build --release                      # binary: target/release/omnix-blender
-omnix-blender install-addon                # installs + enables the bundled add-on via Blender's own CLI
+cargo install --git https://github.com/estradax/omnix-blender
+omnix-blender install-addon        # installs + enables the bundled add-on via Blender's own CLI
 ```
+
+Then:
 
 1. Open Blender 5.3 (4.2+ should work, see "Tested").
 2. In the 3D viewport press `N`, open the **Omnix** tab, click **Start**. (Auto-start is off by default.)
@@ -43,10 +47,10 @@ omnix-blender install-addon                # installs + enables the bundled add-
 4. Add the server to your MCP client:
 
 ```json
-{ "mcpServers": { "blender": { "command": "/absolute/path/to/omnix-blender", "args": ["serve"] } } }
+{ "mcpServers": { "blender": { "command": "omnix-blender", "args": ["serve"] } } }
 ```
 
-Behind omnix: `omnix add blender --command /absolute/path/to/omnix-blender` (then e.g. `"policy": {"read_only": true}`
+Behind omnix: `omnix add blender --command omnix-blender` (then e.g. `"policy": {"read_only": true}`
 exposes only the query tools; `"deny": ["blender.run_python"]` blocks the escape hatch).
 
 `omnix-blender install-addon --uninstall` removes it again. Both are idempotent. `install-addon` changes the Blender
