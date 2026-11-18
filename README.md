@@ -53,7 +53,7 @@ Then:
 { "mcpServers": { "blender": { "command": "omnix-blender", "args": ["serve"] } } }
 ```
 
-Behind omnix: `omnix add blender --command omnix-blender` (then e.g. `"policy": {"read_only": true}`
+Behind omnix: `omnix add blender --command omnix-blender --global` (then e.g. `"policy": {"read_only": true}`
 exposes only the query tools; `"deny": ["blender.run_python"]` blocks the escape hatch).
 
 `omnix-blender install-addon --uninstall` removes it again. Both are idempotent. `install-addon` changes the Blender
